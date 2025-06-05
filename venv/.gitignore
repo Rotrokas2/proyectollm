@@ -1,0 +1,9 @@
+# Entorno virtual
+venv/
+
+# Archivos de VS Code (si usas)
+.vscode/
+
+# Archivos de sistema de Windows
+Thumbs.db
+Desktop.ini

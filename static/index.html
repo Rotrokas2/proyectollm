@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat DeepSeek 7B (Offline)</title>
+
+  <!-- Estilos CSS -->
+  <link rel="stylesheet" href="/static/style.css" />
+
+  <!-- Configuración de MathJax para renderizar LaTeX -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)'], ['$', '$']],
+        displayMath: [['\\[', '\\]']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+  <div class="chat-container">
+    <div id="chat-window" class="chat-window">
+      <!-- Aquí aparecerán los mensajes -->
+    </div>
+
+    <form id="form-chat" class="form-chat">
+      <input
+        type="text"
+        id="prompt"
+        class="input-prompt"
+        placeholder="Escribe tu pregunta..."
+        autocomplete="off"
+      />
+      <button type="submit" class="btn-submit">Enviar</button>
+    </form>
+  </div>
+
+  <script>
+    const formChat = document.getElementById("form-chat");
+    const promptInput = document.getElementById("prompt");
+    const chatWindow = document.getElementById("chat-window");
+
+    // Función para agregar un mensaje al chat (procesa LaTeX)
+    function agregarMensaje(role, texto) {
+      const msgDiv = document.createElement("div");
+      msgDiv.classList.add("message", role);
+
+      const roleSpan = document.createElement("div");
+      roleSpan.classList.add("role");
+      roleSpan.textContent = role === "user" ? "Tú:" : "Asistente:";
+
+      const contentP = document.createElement("p");
+      // Usamos innerHTML para que MathJax detecte las expresiones LaTeX
+      contentP.innerHTML = texto;
+
+      msgDiv.appendChild(roleSpan);
+      msgDiv.appendChild(contentP);
+      chatWindow.appendChild(msgDiv);
+
+      // Scroll automático al final
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+
+      // Después de insertar contenido, indicamos a MathJax que renderice
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        MathJax.typesetPromise([contentP]).catch((err) => {
+          console.error("MathJax error:", err);
+        });
+      }
+    }
+
+    formChat.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const prompt = promptInput.value.trim();
+      if (!prompt) return;
+
+      // 1) Mostrar el mensaje del usuario
+      agregarMensaje("user", prompt);
+      promptInput.value = "";
+      promptInput.disabled = true;
+
+      // 2) Hacer la petición al endpoint /chat
+      try {
+        const respuesta = await fetch("/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ prompt: prompt }),
+        });
+
+        if (!respuesta.ok) {
+          throw new Error(`Error ${respuesta.status}`);
+        }
+
+        const data = await respuesta.json();
+        // 3) Mostrar la respuesta del asistente (con posible LaTeX)
+        agregarMensaje("assistant", data.response);
+      } catch (error) {
+        console.error("Error al llamar a /chat:", error);
+        agregarMensaje("assistant", "Lo siento, ocurrió un error al procesar tu petición.");
+      } finally {
+        promptInput.disabled = false;
+        promptInput.focus();
+      }
+    });
+  </script>
+</body>
+</html>
