@@ -1,7 +1,7 @@
 ## Cómo ejecutar localmente
 
 1. Clonar repo  
-2. `pip install -r requirements.txt`  
+2. `pip install -r Requeriminetos.txt`  
 3. `uvicorn main:app --reload --host 0.0.0.0 --port 8000`  
 4. Abrir en el navegador `http://localhost:8000`
 
