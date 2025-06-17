@@ -4,11 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chat DeepSeek 7B (Offline)</title>
-
-  <!-- Estilos CSS -->
   <link rel="stylesheet" href="/static/style.css" />
 
-  <!-- Configuración de MathJax para renderizar LaTeX -->
+  <!-- MathJax para LaTeX -->
   <script>
     window.MathJax = {
       tex: {
@@ -21,9 +19,28 @@
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
-  <div class="chat-container">
-    <div id="chat-window" class="chat-window">
-      <!-- Aquí aparecerán los mensajes -->
+  <!-- 1) Pantalla de selección de modo -->
+  <div id="mode-select" class="mode-select-container">
+    <h2>Selecciona el modo de uso</h2>
+    <button id="consulta-btn" class="btn-mode">Modo Consulta</button>
+    <button id="tutor-btn"    class="btn-mode">Modo Tutor</button>
+  </div>
+
+  <!-- 2) Leyenda para modo Tutor -->
+  <div id="tutor-legend" class="legend" style="display:none; max-width:600px; margin:0 auto 1rem; padding:0 1rem;">
+    <strong>Modo Tutor:</strong>
+    El modelo intentará **no dar directamente la respuesta** al problema que plantees.
+    En su lugar, ofrecerá **explicaciones claras** y **ejemplos similares** con números distintos
+    para reforzar tu aprendizaje sin revelar la solución original.
+  </div>
+
+  <!-- 3) Chat, oculto hasta que elijan el modo -->
+  <div id="chat-container" class="chat-container" style="display: none;">
+    <div id="chat-window" class="chat-window"></div>
+
+    <!-- Loader sólo para Modo Consulta -->
+    <div id="loader" class="loader" style="display:none; text-align:center; padding:1rem;">
+      <em>Pensando...</em>
     </div>
 
     <form id="form-chat" class="form-chat">
@@ -39,11 +56,35 @@
   </div>
 
   <script>
-    const formChat = document.getElementById("form-chat");
-    const promptInput = document.getElementById("prompt");
-    const chatWindow = document.getElementById("chat-window");
+    let selectedMode = null;
+    const modeSelectDiv  = document.getElementById("mode-select");
+    const tutorLegend    = document.getElementById("tutor-legend");
+    const chatContainer  = document.getElementById("chat-container");
+    const consultaBtn    = document.getElementById("consulta-btn");
+    const tutorBtn       = document.getElementById("tutor-btn");
+    const formChat       = document.getElementById("form-chat");
+    const promptInput    = document.getElementById("prompt");
+    const chatWindow     = document.getElementById("chat-window");
+    const loader         = document.getElementById("loader");
 
-    // Función para agregar un mensaje al chat (procesa LaTeX)
+    // 1) Elegir modo
+    consultaBtn.addEventListener("click", () => {
+      selectedMode = "consulta";
+      startChat();
+    });
+    tutorBtn.addEventListener("click", () => {
+      selectedMode = "tutor";
+      startChat();
+    });
+
+    function startChat() {
+      modeSelectDiv.style.display = "none";
+      chatContainer.style.display = "flex";
+      tutorLegend.style.display  = selectedMode === "tutor" ? "block" : "none";
+      promptInput.focus();
+    }
+
+    // 2) Agregar mensajes al DOM (incluye LaTeX)
     function agregarMensaje(role, texto) {
       const msgDiv = document.createElement("div");
       msgDiv.classList.add("message", role);
@@ -53,54 +94,45 @@
       roleSpan.textContent = role === "user" ? "Tú:" : "Asistente:";
 
       const contentP = document.createElement("p");
-      // Usamos innerHTML para que MathJax detecte las expresiones LaTeX
       contentP.innerHTML = texto;
 
       msgDiv.appendChild(roleSpan);
       msgDiv.appendChild(contentP);
       chatWindow.appendChild(msgDiv);
-
-      // Scroll automático al final
       chatWindow.scrollTop = chatWindow.scrollHeight;
 
-      // Después de insertar contenido, indicamos a MathJax que renderice
       if (window.MathJax && window.MathJax.typesetPromise) {
-        MathJax.typesetPromise([contentP]).catch((err) => {
-          console.error("MathJax error:", err);
-        });
+        MathJax.typesetPromise([contentP]).catch(console.error);
       }
     }
 
+    // 3) Envío del formulario al backend, incluyendo el modo
     formChat.addEventListener("submit", async (e) => {
       e.preventDefault();
       const prompt = promptInput.value.trim();
       if (!prompt) return;
 
-      // 1) Mostrar el mensaje del usuario
       agregarMensaje("user", prompt);
       promptInput.value = "";
       promptInput.disabled = true;
 
-      // 2) Hacer la petición al endpoint /chat
+      // Mostrar loader sólo en Modo Consulta
+      if (selectedMode === "consulta") loader.style.display = "block";
+
       try {
-        const respuesta = await fetch("/chat", {
+        const resp = await fetch("/chat", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ prompt: prompt }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, mode: selectedMode })
         });
-
-        if (!respuesta.ok) {
-          throw new Error(`Error ${respuesta.status}`);
-        }
-
-        const data = await respuesta.json();
-        // 3) Mostrar la respuesta del asistente (con posible LaTeX)
+        if (!resp.ok) throw new Error(`Status ${resp.status}`);
+        const data = await resp.json();
+        loader.style.display = "none";
         agregarMensaje("assistant", data.response);
-      } catch (error) {
-        console.error("Error al llamar a /chat:", error);
-        agregarMensaje("assistant", "Lo siento, ocurrió un error al procesar tu petición.");
+      } catch (err) {
+        loader.style.display = "none";
+        console.error(err);
+        agregarMensaje("assistant", "Error al procesar tu petición.");
       } finally {
         promptInput.disabled = false;
         promptInput.focus();
